@@ -12,6 +12,8 @@ if (Meteor.isClient) {
   var directionsChanged = false;
 
 
+  var pos;
+
   var addressLineIdGrabber = function(){
     return window.location.href.substr(window.location.href.indexOf("id=")).replace("id=","");
   }
@@ -25,22 +27,12 @@ if (Meteor.isClient) {
         console.log("Id found. Fetching route.")
         routeId = addressLineIdGrabber();
         route = Route.findOne({_id:routeId});
-        console.log("Points registered:");
         console.log(route);
       } else {
-        routeId = Route.insert({'points':[]})
+        routeId = Route.insert({'p1':undefined, 'p2':undefined})
         window.location.href="id="+routeId;
         console.log("No id found. Creating route.")
       }
-  }
-
-  var containsPoint = function(a, p) {
-    for (var i = 0; i < a.length; i++) {
-        if (a[i].B === p.B && a[i].k === p.k) {
-            return true;
-        }
-    }
-    return false;
   }
 
 
@@ -58,8 +50,10 @@ if (Meteor.isClient) {
           content: 'Du er her.'
         });
         route = Route.findOne({_id:routeId});
-        if(!containsPoint(route.points,pos)){
-          route.points.push(pos); 
+        if(route.p1 === undefined){
+          route.p1 = pos;
+        } else if (route.p2 === undefined ) {
+          route.p2 = pos;
         }
         Route.update({_id:route._id},route);
 
@@ -76,19 +70,24 @@ if (Meteor.isClient) {
 
   var drawDirectionsOnMap = function(p1,p2){
       if(directionsDisplay.getMap() === null){
-        directionsDisplay.setMap(map);      
+        directionsService = new google.maps.DirectionsService();
+        directionsDisplay.setMap(map);  
+
       }
 
       var request = {
         origin: p1,
-        destination: p2,
-        travelMode: google.maps.TravelMode.WALKING
+        destination: p2      
       };
 
       directionsService.route(request, function(response, status) {
         if (status == google.maps.DirectionsStatus.OK) {
           lastRoute = response.routes[0].overview_path  
           directionsDisplay.setDirections(response);
+        } else {
+          console.log(request);
+          console.log(status);
+          console.log(response);
         }
       });
   }
@@ -135,33 +134,47 @@ if (Meteor.isClient) {
 
   Meteor.startup(function () {
     drawMap();
-    // code to run on client at startup
-    // if id is present in window.location.href
-    // find points with id
-    // render splash screen with participant count + show your own location.
     resolveAppState();
-    // ask to share location
-    // if no id is present in window.location.href
-    // render splashscreen with "Start link"
-    // Steps. 1. Register on map 2. Share link to friends.
   });
-
 
 
   var directionsUpdate = function(){
     route = Route.findOne({_id:routeId});
-    console.log(route)
-    if(route.points.length > 1 && route.points.length % 2 === 0)
-    for (var i = 0; i < route.points.length; i++) {
-      var p1 = new google.maps.LatLng(route.points[i].k,   route.points[i].B);
-      var p2 = new google.maps.LatLng(route.points[i+1].k, route.points[i+1].B);
-      drawDirectionsOnMap(p1,p2);
-    };
+    if(route.p1!==undefined && route.p2 != undefined){
+      console.log(route);
+      var p1k = route.p1.k;
+      var p1B = route.p1.B;
+      var p2k = route.p1.k;
+      var p2B = route.p1.B;
+
+
+      drawDirectionsOnMap(
+        new google.maps.LatLng(p1k, p1B),
+        new google.maps.LatLng(p2k, p2B))
+    }
+  }
+
+  var updateThisPosition = function(){
+    if(pos !== null){
+
+      navigator.geolocation.getCurrentPosition(function(position) {
+        if(position !== pos) {
+          route = Route.findOne({_id:routeId});
+          if(route.p1 === pos) {
+            route.p1 = position;
+          } else if(route.p2 === pos) {
+            route.p2 = position;
+          }
+          pos = position;
+          Route.update({_id:route._id},route);        }
+      });
+
+    }
   }
 
 
-  Meteor.setInterval(directionsUpdate, 10000); // Add new trains to track
-
+  Meteor.setInterval(updateThisPosition,10000);
+  Meteor.setInterval(directionsUpdate, 10000); 
 
 
 
