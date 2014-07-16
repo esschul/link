@@ -1,0 +1,25 @@
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=2.0, user-scalable=yes"/>
+  <title>link</title>
+  <script type="text/javascript" src="https://maps.googleapis.com/maps/api/js?v=3.exp"></script>
+</head>
+
+<body>
+	{{> menu}}
+	<div id="map-canvas"></div>
+</body>
+
+
+<template name="menu">
+	<div id="menu" class="no-participants">
+		<p class="no-participants">
+			Velkommen, du er første mann på kartet.
+		</p>
+		<p class="participants hidden">
+			Hei, det er folk her allerede.
+			Enten registrer din posisjon elller punkt eller kom inn og titt.
+		</p>
+
+		<button id="show-me-on-the-map">Registrer min posisjon på kartet</button>
+	</div>
+</template>

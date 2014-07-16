@@ -1,0 +1,59 @@
+/* CSS declarations go here */
+html, body { 
+	height:100%; 
+	margin: 0;
+}
+
+#menu.no-participants {
+	background: orange;
+}
+
+#menu. p.no-participants {
+	padding: 10px;
+}
+
+#menu.participants {
+}
+
+
+.hidden{
+	display: none
+}
+
+#menu {
+	position: absolute; 
+	z-index:99;
+	height:100%;
+	width:100%;
+	background: 
+	font-size: 20px;
+	font-family:tahoma;
+	bottom:15px;
+	right:0px;
+}
+
+#menu button {
+	background-color:#44c767;
+	-moz-border-radius:28px;
+	-webkit-border-radius:28px;
+	border-radius:5px;
+	border:1px solid #18ab29;
+	display:inline-block;
+	cursor:pointer;
+	color:#ffffff;
+	font-family:arial;
+	font-size:14px;
+	padding:12px 31px;
+	text-decoration:none;
+	text-shadow:0px 1px 0px #2f6627;
+}
+#menu button:hover {
+	background-color:#5cbf2a;
+}
+#menu button:active {
+	position:relative;
+}
+
+#map-canvas {
+	width: 100%; height: 100%; margin: 0px; top: 0px; overflow: hidden; z-index: 1; position: relative;
+}
