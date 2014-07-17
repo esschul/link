@@ -134,6 +134,7 @@ if (Meteor.isClient) {
   Meteor.startup(function () {
     drawMap();
     resolveAppState();
+    showPositionOnMap();
   });
 
 
