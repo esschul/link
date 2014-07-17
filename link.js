@@ -40,8 +40,7 @@ if (Meteor.isClient) {
   var showPositionOnMap = function(){
    if(navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(function(position) {
-        pos = new google.maps.LatLng(position.coords.latitude,
-                                         position.coords.longitude);
+        pos = new google.maps.LatLng(position.coords.latitude,position.coords.longitude);
         console.log("Current position is latitude: " +position.coords.latitude + " and longitude" + position.coords.longitude);
 
         var infowindow = new google.maps.InfoWindow({
@@ -140,7 +139,7 @@ if (Meteor.isClient) {
 
   var directionsUpdate = function(){
     route = Route.findOne({_id:routeId});
-    if(route.p1!==undefined && route.p2 != undefined){
+    if(route !== undefined && route.p1!==undefined && route.p2 != undefined){
       console.log(route);
       var p1k = route.p1.k;
       var p1B = route.p1.B;
@@ -155,21 +154,25 @@ if (Meteor.isClient) {
   }
 
   var updateThisPosition = function(){
-    if(pos !== null){
-
+    console.log("updating position - start")
       navigator.geolocation.getCurrentPosition(function(position) {
-        if(position !== pos) {
-          route = Route.findOne({_id:routeId});
-          if(route.p1 === pos) {
-            route.p1 = position;
-          } else if(route.p2 === pos) {
-            route.p2 = position;
-          }
-          pos = position;
-          Route.update({_id:route._id},route);        }
-      });
+        var newPos = new google.maps.LatLng(position.coords.latitude,position.coords.longitude);
+        console.log("Current position is latitude: " +position.coords.latitude + " and longitude" + position.coords.longitude);
 
-    }
+        if(pos === undefined){pos = newPos}
+
+        if(pos !== newPos) {
+          route = Route.findOne({_id:routeId});
+          if(route.p1 === undefined || route.p1 === pos) {
+            route.p1 = newPos;
+          } else if(route.p2 === newPos) {
+            route.p2 = newPos;
+          }
+          pos = newPos;
+          Route.update({_id:route._id},route);        
+        }
+      });
+      console.log("updating position - stop")
   }
 
 
