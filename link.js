@@ -144,8 +144,8 @@ if (Meteor.isClient) {
       console.log(route);
       var p1k = route.p1.k;
       var p1B = route.p1.B;
-      var p2k = route.p1.k;
-      var p2B = route.p1.B;
+      var p2k = route.p2.k;
+      var p2B = route.p2.B;
 
 
       drawDirectionsOnMap(
