@@ -142,6 +142,7 @@ if (Meteor.isClient) {
 
   var directionsUpdate = function(){
     route = Route.findOne({timeFld:time});
+    console.log(route);
     if(route !== undefined && route.p1!==undefined && route.p2 != undefined){
       console.log(route);
       var p1k = route.p1.k;
@@ -169,10 +170,12 @@ if (Meteor.isClient) {
           time = addressLineIdGrabber();
           route = Route.findOne({timeFld:time});
           if(route!==undefined){
-            if(route != undefined && route.p1 === undefined || route !== undefined && route.p1 === pos) {
+            if(route.p1 === undefined ||  route.p1 === pos) {
               route.p1 = newPos;
-            } else if(route != undefined && route.p2 === newPos) {
-              route.p2 = newPos;
+            } else if(route.p1 !==  undefined && route.p2 === undefined || route.p2 === pos) {
+              if(route.p1 !== newPos){
+                route.p2 = newPos;
+              }
             }
             Route.update({_id:route._id},route);        
           } else {
