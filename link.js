@@ -2,7 +2,7 @@ var Route = new Meteor.Collection("route");
 
 if (Meteor.isClient) {
   
-  var routeId;
+  var time;
   var route;
   var idx;
   var map;
@@ -11,27 +11,30 @@ if (Meteor.isClient) {
   var directionsService
   var directionsChanged = false;
 
-
   var pos;
 
   var addressLineIdGrabber = function(){
-    return window.location.href.substr(window.location.href.indexOf("id=")).replace("id=","");
-  }
-
-  var addressLineContains = function(text){
-    return window.location.href.indexOf(text) !== -1;
+    var array = window.location.href.split("/");
+    console.log(array[3].length)
+    if(array.length === 4 && array[3].length === 13){
+      return array[3];
+    } else return undefined;
   }
 
   var resolveAppState = function(){
-      if(addressLineContains("id=")){
-        console.log("Id found. Fetching route.")
-        routeId = addressLineIdGrabber();
-        route = Route.findOne({_id:routeId});
-        console.log(route);
+      time = addressLineIdGrabber();
+      console.log(time);
+      if(time !== undefined){
+          console.log(Route.find().count());
+          route = Route.findOne({timeFld:time});
+          if(route === undefined){
+            console.log("Could not find route. Inserting a new. " + time )
+            Route.insert({timeFld:time});
+          } else {
+            console.log("Route found. Set as globalvar")
+          }
       } else {
-        routeId = Route.insert({'p1':undefined, 'p2':undefined})
-        window.location.href="id="+routeId;
-        console.log("No id found. Creating route.")
+        window.location.href+=new Date().getTime();
       }
   }
 
@@ -48,10 +51,10 @@ if (Meteor.isClient) {
           position: pos,
           content: 'Du er her.'
         });
-        route = Route.findOne({_id:routeId});
+        route = Route.findOne({timeFld:time});
         if(route.p1 === undefined){
           route.p1 = pos;
-        } else if (route.p2 === undefined ) {
+        } else if (route.p1 !== undefined && route.p2 === undefined ) {
           route.p2 = pos;
         }
         Route.update({_id:route._id},route);
@@ -133,13 +136,12 @@ if (Meteor.isClient) {
 
   Meteor.startup(function () {
     drawMap();
-    resolveAppState();
     showPositionOnMap();
   });
 
 
   var directionsUpdate = function(){
-    route = Route.findOne({_id:routeId});
+    route = Route.findOne({timeFld:time});
     if(route !== undefined && route.p1!==undefined && route.p2 != undefined){
       console.log(route);
       var p1k = route.p1.k;
@@ -155,37 +157,37 @@ if (Meteor.isClient) {
   }
 
   var updateThisPosition = function(){
-    console.log("updating position - start")
+    console.log("updating position - start");
+      if(navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(function(position) {
         var newPos = new google.maps.LatLng(position.coords.latitude,position.coords.longitude);
         console.log("Current position is latitude: " +position.coords.latitude + " and longitude" + position.coords.longitude);
 
-        if(pos === undefined){pos = newPos}
+        if(pos === undefined){  pos = newPos;  }
 
         if(pos !== newPos) {
-          route = Route.findOne({_id:routeId});
-          if(route.p1 === undefined || route.p1 === pos) {
-            route.p1 = newPos;
-          } else if(route.p2 === newPos) {
-            route.p2 = newPos;
+          time = addressLineIdGrabber();
+          route = Route.findOne({timeFld:time});
+          if(route!==undefined){
+            if(route != undefined && route.p1 === undefined || route !== undefined && route.p1 === pos) {
+              route.p1 = newPos;
+            } else if(route != undefined && route.p2 === newPos) {
+              route.p2 = newPos;
+            }
+            Route.update({_id:route._id},route);        
+          } else {
+           console.log("Route not found.") 
           }
           pos = newPos;
-          Route.update({_id:route._id},route);        
         }
       });
       console.log("updating position - stop")
+    }
   }
 
-
-  Meteor.setInterval(updateThisPosition,10000);
+  Meteor.setInterval(updateThisPosition, 10000);
   Meteor.setInterval(directionsUpdate, 10000); 
-
-
-
-
-
-
-
+  Meteor.setTimeout(resolveAppState, 5000);
 }
 
 if (Meteor.isServer) {
