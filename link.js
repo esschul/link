@@ -56,6 +56,7 @@ if (Meteor.isClient) {
           route.p1 = pos;
         } else if (route.p1 !== undefined && route.p2 === undefined ) {
           route.p2 = pos;
+          //route.p2s.push()  SHould be able to add several subscribers to point.
         }
         Route.update({_id:route._id},route);
 
@@ -70,16 +71,19 @@ if (Meteor.isClient) {
 
 
 
-  var drawDirectionsOnMap = function(p1,p2){
+  var drawDirectionsOnMap = function(p1,p2,travelMode){
       if(directionsDisplay.getMap() === null){
         directionsService = new google.maps.DirectionsService();
         directionsDisplay.setMap(map);  
 
       }
 
+      if(travelMode === undefined){travelMode = google.maps.TravelMode.WALKING;}
+
       var request = {
-        origin: p1,
-        destination: p2      
+      origin: p1,
+      destination: p2,
+      travelMode: travelMode
       };
 
       directionsService.route(request, function(response, status) {
@@ -93,6 +97,31 @@ if (Meteor.isClient) {
         }
       });
   }
+
+var distanceToAnyPointAsTheCrowFlies = function(p1,p2){//lat1,lon1,lat2,lon2
+    console.log(coords);
+    directionsChanged = false;
+
+    var lat1=p1.B;
+    var lon1=p1.k;
+
+    var lat2=p2.B;
+    var lon2=p2.k;
+
+    var R = 6371; // km
+    var φ1 = lat1.toRad();
+    var φ2 = lat2.toRad();
+    var Δφ = (lat2-lat1).toRad();
+    var Δλ = (lon2-lon1).toRad();
+    var a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    var d = R * c;
+    console.log(d * 100);
+    return d * 1000 // 1km = 1000m;
+}
+
 
 
   var drawMap = function(){
@@ -140,6 +169,11 @@ if (Meteor.isClient) {
   });
 
 
+  var resolveTravelMode(distance){
+    if(distance === undefined || distance < 2000) return google.maps.TravelMode.WALKING;
+    if(distance > 2000) return google.maps.TravelMode.DRIVING;
+  }
+
   var directionsUpdate = function(){
     route = Route.findOne({timeFld:time});
     console.log(route);
@@ -150,10 +184,11 @@ if (Meteor.isClient) {
       var p2k = route.p2.k;
       var p2B = route.p2.B;
 
+      var travelMode = resolveTravelMode(distanceToAnyPointAsTheCrowFlies(route.p1,route.p2));
 
       drawDirectionsOnMap(
         new google.maps.LatLng(p1k, p1B),
-        new google.maps.LatLng(p2k, p2B))
+        new google.maps.LatLng(p2k, p2B),travelMode)
     }
   }
 
@@ -175,6 +210,8 @@ if (Meteor.isClient) {
             } else if(route.p1 !==  undefined && route.p2 === undefined || route.p2 === pos) {
               if(route.p1 !== newPos){
                 route.p2 = newPos;
+                console.log("Setting the route.p2: " + route.p2);
+                console.log("And this is route.p1: " + route.p1);
               }
             }
             Route.update({_id:route._id},route);        
