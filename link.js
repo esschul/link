@@ -1,7 +1,7 @@
 var Route = new Meteor.Collection("route");
 
 if (Meteor.isClient) {
-  
+  var infowindow; 
   var time;
   var route;
   var idx;
@@ -46,7 +46,7 @@ if (Meteor.isClient) {
         pos = new google.maps.LatLng(position.coords.latitude,position.coords.longitude);
         console.log("Current position is latitude: " +position.coords.latitude + " and longitude" + position.coords.longitude);
 
-        var infowindow = new google.maps.InfoWindow({
+        infowindow = new google.maps.InfoWindow({
           map: map,
           position: pos,
           content: 'Du er her.'
@@ -54,7 +54,7 @@ if (Meteor.isClient) {
         route = Route.findOne({timeFld:time});
         if(route.p1 === undefined){
           route.p1 = pos;
-        } else if (route.p1 !== undefined && route.p2 === undefined ) {
+        } else if (route.p1 !== undefined && route.p2 === undefined && pos !== route.p1) {
           route.p2 = pos;
           //route.p2s.push()  SHould be able to add several subscribers to point.
         }
@@ -99,9 +99,6 @@ if (Meteor.isClient) {
   }
 
 var distanceToAnyPointAsTheCrowFlies = function(p1,p2){//lat1,lon1,lat2,lon2
-    console.log(coords);
-    directionsChanged = false;
-
     var lat1=p1.B;
     var lon1=p1.k;
 
@@ -118,7 +115,7 @@ var distanceToAnyPointAsTheCrowFlies = function(p1,p2){//lat1,lon1,lat2,lon2
             Math.sin(Δλ/2) * Math.sin(Δλ/2);
     var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     var d = R * c;
-    console.log(d * 100);
+
     return d * 1000 // 1km = 1000m;
 }
 
@@ -169,7 +166,7 @@ var distanceToAnyPointAsTheCrowFlies = function(p1,p2){//lat1,lon1,lat2,lon2
   });
 
 
-  var resolveTravelMode(distance){
+  var resolveTravelMode = function(distance){
     if(distance === undefined || distance < 2000) return google.maps.TravelMode.WALKING;
     if(distance > 2000) return google.maps.TravelMode.DRIVING;
   }
@@ -184,8 +181,8 @@ var distanceToAnyPointAsTheCrowFlies = function(p1,p2){//lat1,lon1,lat2,lon2
       var p2k = route.p2.k;
       var p2B = route.p2.B;
 
-      var travelMode = resolveTravelMode(distanceToAnyPointAsTheCrowFlies(route.p1,route.p2));
-
+      //var travelMode = resolveTravelMode(distanceToAnyPointAsTheCrowFlies(route.p1,route.p2));
+      var travelMode;
       drawDirectionsOnMap(
         new google.maps.LatLng(p1k, p1B),
         new google.maps.LatLng(p2k, p2B),travelMode)
@@ -209,6 +206,7 @@ var distanceToAnyPointAsTheCrowFlies = function(p1,p2){//lat1,lon1,lat2,lon2
               route.p1 = newPos;
             } else if(route.p1 !==  undefined && route.p2 === undefined || route.p2 === pos) {
               if(route.p1 !== newPos){
+                
                 route.p2 = newPos;
                 console.log("Setting the route.p2: " + route.p2);
                 console.log("And this is route.p1: " + route.p1);
