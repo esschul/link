@@ -1,235 +1,213 @@
-var Route = new Meteor.Collection("route");
+  var Route = new Meteor.Collection("route");
 
-if (Meteor.isClient) {
-  var infowindow; 
-  var time;
-  var route;
-  var idx;
-  var map;
-  var rendererOptions = {draggable: true};
-  var directionsDisplay;
-  var directionsService
-  var directionsChanged = false;
+  if (Meteor.isClient) {
 
-  var pos;
+    var linkEstablished = false;
 
-  var addressLineIdGrabber = function(){
-    var array = window.location.href.split("/");
-    console.log(array[3].length)
-    if(array.length === 4 && array[3].length === 13){
-      return array[3];
-    } else return undefined;
-  }
+    var time;
+    var ip;
 
-  var resolveAppState = function(){
-      time = addressLineIdGrabber();
-      console.log(time);
-      if(time !== undefined){
-          console.log(Route.find().count());
-          route = Route.findOne({timeFld:time});
-          if(route === undefined){
-            console.log("Could not find route. Inserting a new. " + time )
-            Route.insert({timeFld:time});
-          } else {
-            console.log("Route found. Set as globalvar")
-          }
-      } else {
-        window.location.href+=new Date().getTime();
-      }
-  }
+    var map;
+    var rendererOptions = {draggable: true};
+    var directionsDisplay;
+    var directionsService
 
+    var sistPosisjon;
+    var nyPosisjon;
 
-
-  var showPositionOnMap = function(){
-   if(navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(function(position) {
-        pos = new google.maps.LatLng(position.coords.latitude,position.coords.longitude);
-        console.log("Current position is latitude: " +position.coords.latitude + " and longitude" + position.coords.longitude);
-
-        infowindow = new google.maps.InfoWindow({
-          map: map,
-          position: pos,
-          content: 'Du er her.'
-        });
-        route = Route.findOne({timeFld:time});
-        if(route.p1 === undefined){
-          route.p1 = pos;
-        } else if (route.p1 !== undefined && route.p2 === undefined && pos !== route.p1) {
-          route.p2 = pos;
-          //route.p2s.push()  SHould be able to add several subscribers to point.
-        }
-        Route.update({_id:route._id},route);
-
-        map.setCenter(pos);
-        map.setZoom(15);
-        
-      });
-    } else {
-      console.log("No position!");
+    var hentIdFraAdresseLinje = function(){
+      var array = window.location.href.split("/");
+      console.log(array[3].length)
+      if(array.length === 4 && array[3].length === 13){
+        return array[3];
+      } else return undefined;
     }
-  }
 
-
-
-  var drawDirectionsOnMap = function(p1,p2,travelMode){
-      if(directionsDisplay.getMap() === null){
-        directionsService = new google.maps.DirectionsService();
-        directionsDisplay.setMap(map);  
-
-      }
-
-      if(travelMode === undefined){travelMode = google.maps.TravelMode.WALKING;}
-
-      var request = {
-      origin: p1,
-      destination: p2,
-      travelMode: travelMode
-      };
-
-      directionsService.route(request, function(response, status) {
-        if (status == google.maps.DirectionsStatus.OK) {
-          lastRoute = response.routes[0].overview_path  
-          directionsDisplay.setDirections(response);
+    var lagUnikIdForKart = function(){
+        time = hentIdFraAdresseLinje();
+        console.log(time);
+        if(time !== undefined){
+            var count = Route.find({time:time}).count();
+            if(count === 0){
+              console.log("Could not find route. Inserting a new. " + time + " : " +ip )
+              Route.insert({time:time,ip:ip});
+            } else {
+              console.log("Route found. Set as globalvar")
+            }
         } else {
-          console.log(request);
-          console.log(status);
-          console.log(response);
+          window.location.href+=new Date().getTime();
         }
-      });
+    }
+
+
+    var drawDirectionsOnMap = function(pos1,pos2,travelMode){
+        console.log("drawDirectionsOnMap: start");
+        if(directionsDisplay.getMap() === null){
+          directionsDisplay = new google.maps.DirectionsRenderer(rendererOptions);
+          directionsService = new google.maps.DirectionsService();
+          directionsDisplay.setMap(map);  
+        }
+
+        var request = {
+          origin: pos1,
+          destination: pos2,
+          travelMode: travelMode
+        };
+        
+        console.log("Request is:");
+        console.log(request);
+
+        directionsService.route(request, function(response, status) {
+          if (status == google.maps.DirectionsStatus.OK) {
+            directionsDisplay.setDirections(response);
+          } else {
+            console.log(request);
+            console.log(status);
+            console.log(response);
+          }
+        });
+        console.log("drawDirectionsOnMap: stopp");
+    }
+
+
+
+
+  // Used to resolve travel mode
+  var avstand = function(p1,p2){//lat1,lon1,lat2,lon2
+      console.log("Calculating distance");
+      console.log(p1);
+      console.log(p2);
+
+      var lat1=p1.B;
+      var lon1=p1.k;
+
+      var lat2=p2.B;
+      var lon2=p2.k;
+
+      var R = 6371; // km
+      var φ1 = lat1.toRad();
+      var φ2 = lat2.toRad();
+      var Δφ = (lat2-lat1).toRad();
+      var Δλ = (lon2-lon1).toRad();
+      var a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ/2) * Math.sin(Δλ/2);
+      var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      var d = R * c;
+
+
+      return d * 1000 // 1km = 1000m;
   }
-
-var distanceToAnyPointAsTheCrowFlies = function(p1,p2){//lat1,lon1,lat2,lon2
-    var lat1=p1.B;
-    var lon1=p1.k;
-
-    var lat2=p2.B;
-    var lon2=p2.k;
-
-    var R = 6371; // km
-    var φ1 = lat1.toRad();
-    var φ2 = lat2.toRad();
-    var Δφ = (lat2-lat1).toRad();
-    var Δλ = (lon2-lon1).toRad();
-    var a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ/2) * Math.sin(Δλ/2);
-    var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    var d = R * c;
-
-    return d * 1000 // 1km = 1000m;
-}
-
-
-
-  var drawMap = function(){
-    directionsDisplay = new google.maps.DirectionsRenderer(rendererOptions);
-    directionsService = new google.maps.DirectionsService();
-
-     var mapOptions = {
-        zoom: 10,
-        center: new google.maps.LatLng(59.8, 10.6),
-        mapTypeControl: true,
-        mapTypeControlOptions: {
-          style: google.maps.MapTypeControlStyle.DROPDOWN_MENU
-        },
-        zoomControl: true,
-        zoomControlOptions: {
-          style: google.maps.ZoomControlStyle.SMALL
-        } 
+    var resolveTravelMode = function(distance){
+      console.log("Resolving distance " + distance);
+      if(distance === undefined || distance < 2000) {
+        console.log("google.maps.TravelMode.WALKING");
+        return google.maps.TravelMode.WALKING;
       }
-      map = new google.maps.Map(document.getElementById('map-canvas'), mapOptions);
-      directionsDisplay.setMap(map);
+        
+      if(distance > 2000){
+        console.log("google.maps.TravelMode.TRANSIT");
+        return google.maps.TravelMode.TRANSIT
+      }
+    }
 
 
-    google.maps.event.addListener(directionsDisplay, 'directions_changed', function() {
-      console.log("Directions changed");
-      directionsChanged = true;
+    var tegnOppKart = function(){
+      directionsDisplay = new google.maps.DirectionsRenderer(rendererOptions);
+      directionsService = new google.maps.DirectionsService();
+
+       var mapOptions = {
+          zoom: 10,
+          center: new google.maps.LatLng(59.8, 10.6),
+          mapTypeControl: true,
+          mapTypeControlOptions: {
+            style: google.maps.MapTypeControlStyle.DROPDOWN_MENU
+          },
+          zoomControl: true,
+          zoomControlOptions: {
+            style: google.maps.ZoomControlStyle.SMALL
+          } 
+        }
+        map = new google.maps.Map(document.getElementById('map-canvas'), mapOptions);
+        directionsDisplay.setMap(map);
+    }
+
+
+    Meteor.startup(function () {
+      Meteor.http.get("http://ip-api.com/json", function(err, result) {
+          if(result.content !==undefined){
+            var json = JSON.parse(result.content);
+            ip = json.query;
+          }
+      });
+      tegnOppKart();
     });
 
-    google.maps.event.addListener(map, 'click', function(event) {});
-  }
-
-
-
-  Template.menu.events({
-    'click #show-me-on-the-map' : function (event) {
-        console.log("Show me on the map.");
-        document.getElementById("menu").className="hidden";
-        showPositionOnMap();
-    }
-  } );
-
-
-  Meteor.startup(function () {
-    drawMap();
-    showPositionOnMap();
-  });
-
-
-  var resolveTravelMode = function(distance){
-    if(distance === undefined || distance < 2000) return google.maps.TravelMode.WALKING;
-    if(distance > 2000) return google.maps.TravelMode.DRIVING;
-  }
-
-  var directionsUpdate = function(){
-    route = Route.findOne({timeFld:time});
-    console.log(route);
-    if(route !== undefined && route.p1!==undefined && route.p2 != undefined){
-      console.log(route);
-      var p1k = route.p1.k;
-      var p1B = route.p1.B;
-      var p2k = route.p2.k;
-      var p2B = route.p2.B;
-
-      //var travelMode = resolveTravelMode(distanceToAnyPointAsTheCrowFlies(route.p1,route.p2));
-      var travelMode;
-      drawDirectionsOnMap(
-        new google.maps.LatLng(p1k, p1B),
-        new google.maps.LatLng(p2k, p2B),travelMode)
-    }
-  }
-
-  var updateThisPosition = function(){
-    console.log("updating position - start");
-      if(navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(function(position) {
-        var newPos = new google.maps.LatLng(position.coords.latitude,position.coords.longitude);
-        console.log("Current position is latitude: " +position.coords.latitude + " and longitude" + position.coords.longitude);
-
-        if(pos === undefined){  pos = newPos;  }
-
-        if(pos !== newPos) {
-          time = addressLineIdGrabber();
-          route = Route.findOne({timeFld:time});
-          if(route!==undefined){
-            if(route.p1 === undefined ||  route.p1 === pos) {
-              route.p1 = newPos;
-            } else if(route.p1 !==  undefined && route.p2 === undefined || route.p2 === pos) {
-              if(route.p1 !== newPos){
-                
-                route.p2 = newPos;
-                console.log("Setting the route.p2: " + route.p2);
-                console.log("And this is route.p1: " + route.p1);
+    
+    var registrerPosisjon = function(){
+      console.log("registrerPosisjon : start" );
+      if(ip !== undefined && navigator.geolocation) {
+          console.log(ip);
+          navigator.geolocation.getCurrentPosition(function(position) {
+            nyPosisjon = new google.maps.LatLng(position.coords.latitude,position.coords.longitude);
+            if(nyPosisjon !== sistPosisjon){
+              if(sistPosisjon === undefined || avstand(nyPosisjon,sistPosisjon) > 15){
+                console.log("registrerPosisjon : Ny posisjon mer enn 15 meter");
+                sistPosisjon=nyPosisjon;  
+                var route = Route.findOne({time:time,ip:ip});
+                if(route!==undefined){
+                    console.log("registrerPosisjon : Oppdatert time+ip");
+                    route.pos = nyPosisjon;
+                    Route.update({_id:route._id},route);                
+                } else {
+                    console.log("registrerPosisjon : Ny posisjon for time+ip");
+                    Route.insert({time:time,ip:ip,pos:nyPosisjon});  
+                }
+              } else {
+                console.log("registrerPosisjon : Ny posisjon mindre enn 15 meter");
               }
             }
-            Route.update({_id:route._id},route);        
-          } else {
-           console.log("Route not found.") 
-          }
-          pos = newPos;
+          });
+      }
+      console.log("registrerPosisjon : stopp" );
+    }
+
+
+    var oppdaterRute = function(){
+        console.log("oppdaterRute : start" );
+        var points = Route.find({time:time});
+        console.log("Fant " + points.count() + " punkter");
+        if(points.count() > 1){
+          var pArray = [];
+          console.log("Points:");
+          points.forEach(function(point){
+            console.log(point);
+            pArray.push(point);
+          });        
+
+          var pos1 = pArray[0].pos;
+          var pos2 = pArray[1].pos;
+          var travelMode = resolveTravelMode(avstand(pos1, pos2));
+          drawDirectionsOnMap(pos1, pos2, travelMode);
         }
-      });
-      console.log("updating position - stop")
+        console.log("oppdaterRute : stopp" );
+    }
+
+
+  if (typeof(Number.prototype.toRad) === "undefined") {
+    Number.prototype.toRad = function() {
+      return this * Math.PI / 180;
     }
   }
 
-  Meteor.setInterval(updateThisPosition, 10000);
-  Meteor.setInterval(directionsUpdate, 10000); 
-  Meteor.setTimeout(resolveAppState, 5000);
-}
+    Meteor.setInterval(registrerPosisjon, 10000);
+    Meteor.setInterval(oppdaterRute, 10000); 
+    // lets do that when everything is loaded.
+    Meteor.setTimeout(lagUnikIdForKart, 5000);
+  }
 
-if (Meteor.isServer) {
-  Meteor.startup(function () {
-    // code to run on server at startup
-  });
-}
+  if (Meteor.isServer) {
+    Meteor.startup(function () {
+      // code to run on server at startup
+    });
+  }
