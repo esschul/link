@@ -27,12 +27,11 @@
         time = hentIdFraAdresseLinje();
         console.log(time);
         if(time !== undefined){
-            var count = Route.find({time:time}).count();
+            var count = Route.find({time:time,ip:ip});
             if(count === 0){
-              console.log("Could not find route. Inserting a new. " + time + " : " +ip )
               Route.insert({time:time,ip:ip});
             } else {
-              console.log("Route found. Set as globalvar")
+              console.log("Route found.")
             }
         } else {
           window.location.href+=new Date().getTime();
@@ -49,8 +48,8 @@
         }
 
         var request = {
-          origin: pos1,
-          destination: pos2,
+          origin: new google.maps.LatLng(pos1.k, pos1.B),
+          destination: new google.maps.LatLng(pos2.k, pos2.B),
           travelMode: travelMode
         };
         
@@ -74,7 +73,9 @@
 
   // Used to resolve travel mode
   var avstand = function(p1,p2){//lat1,lon1,lat2,lon2
-      console.log("Calculating distance");
+      if(p1===undefined || p2 ===undefined ) return 0;
+
+      console.log("Maaler avstand mellom punktene");
       console.log(p1);
       console.log(p2);
 
@@ -107,7 +108,7 @@
         
       if(distance > 2000){
         console.log("google.maps.TravelMode.TRANSIT");
-        return google.maps.TravelMode.TRANSIT
+        return google.maps.TravelMode.DRIVING;
       }
     }
 
@@ -151,8 +152,9 @@
           navigator.geolocation.getCurrentPosition(function(position) {
             nyPosisjon = new google.maps.LatLng(position.coords.latitude,position.coords.longitude);
             if(nyPosisjon !== sistPosisjon){
-              if(sistPosisjon === undefined || avstand(nyPosisjon,sistPosisjon) > 15){
-                console.log("registrerPosisjon : Ny posisjon mer enn 15 meter");
+              var avs = avstand(nyPosisjon,sistPosisjon);
+              if(sistPosisjon === undefined || avs > 15){
+                console.log("registrerPosisjon : Ny posisjon er "+ avs + " meter unna.");
                 sistPosisjon=nyPosisjon;  
                 var route = Route.findOne({time:time,ip:ip});
                 if(route!==undefined){
@@ -164,7 +166,7 @@
                     Route.insert({time:time,ip:ip,pos:nyPosisjon});  
                 }
               } else {
-                console.log("registrerPosisjon : Ny posisjon mindre enn 15 meter");
+                console.log("registrerPosisjon : Ikke oppdatert. Ny posisjon er "+ avs + " meter unna.");
               }
             }
           });
