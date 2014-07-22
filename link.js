@@ -8,16 +8,18 @@
     var ip;
 
     var map;
-    var rendererOptions = {draggable: true};
-    var directionsDisplay;
-    var directionsService
+    var rendererOptions = {draggable: true, preserveViewport:true, suppressMarkers: true};
+    var directionsDisplayArray = [];
+    var directionsService;
+    var infowindow;
+    var markers = [];
+
 
     var sistPosisjon;
     var nyPosisjon;
 
     var hentIdFraAdresseLinje = function(){
       var array = window.location.href.split("/");
-      console.log(array[3].length)
       if(array.length === 4 && array[3].length === 13){
         return array[3];
       } else return undefined;
@@ -25,34 +27,57 @@
 
     var lagUnikIdForKart = function(){
         time = hentIdFraAdresseLinje();
-        console.log(time);
         if(time !== undefined){
-            var count = Route.find({time:time,ip:ip});
+            var count = Route.find({time:time,main:true}).count();
             if(count === 0){
-              Route.insert({time:time,ip:ip});
+              console.log("lagUnikIdForKart:Rute funnet. Lager destinasjonspunkt.")
+              var nick=prompt('Nick',' ');
+              Route.insert({time:time,ip:ip,main:true,nick:nick});
             } else {
-              console.log("Route found.")
+              console.log("lagUnikIdForKart:Rute funnet.");
             }
         } else {
           window.location.href+=new Date().getTime();
         }
     }
 
+    // future
+    var lagMotePunkt = function(lat,lon){
+      Route.delete({time:time,main:true});
+      Route.insert({time:time,pos:new google.maps.LatLng(lat,lon),main:true});
+    }
 
-    var drawDirectionsOnMap = function(pos1,pos2,travelMode){
-        console.log("drawDirectionsOnMap: start");
-        if(directionsDisplay.getMap() === null){
-          directionsDisplay = new google.maps.DirectionsRenderer(rendererOptions);
-          directionsService = new google.maps.DirectionsService();
-          directionsDisplay.setMap(map);  
-        }
 
+    var tegnRutePaaKartet = function(pos1,pos2,travelMode, nickOrigin, nickDestination){
+        console.log("tegnRutePaaKartet: start");
+        var directionsDisplay = new google.maps.DirectionsRenderer(rendererOptions);
+        directionsDisplay.setMap(map);
+
+        if(nickOrigin === undefined || nickOrigin.trim() ===''){ nickOrigin = 'Anonym'; }
+        if(nickDestination === undefined || nickDestination.trim() ===''){ nickDestination = 'Anonym'; }
+
+        var originLatLon = new google.maps.LatLng(pos1.k, pos1.B);
+        var destinationLatLon = new google.maps.LatLng(pos2.k, pos2.B);
+        
         var request = {
-          origin: new google.maps.LatLng(pos1.k, pos1.B),
-          destination: new google.maps.LatLng(pos2.k, pos2.B),
+          origin: originLatLon,
+          destination: destinationLatLon,
           travelMode: travelMode
         };
-        
+
+        var originMarker = new google.maps.InfoWindow({
+            map: map,
+            position: originLatLon,
+            content: nickOrigin
+        });
+
+        var destinationMarker = new google.maps.InfoWindow({
+            map: map,
+            position:destinationLatLon,
+            content: nickDestination
+        });
+
+
         console.log("Request is:");
         console.log(request);
 
@@ -65,7 +90,11 @@
             console.log(response);
           }
         });
-        console.log("drawDirectionsOnMap: stopp");
+        markers.push(originMarker);
+        markers.push(destinationMarker);
+        directionsDisplayArray.push(directionsDisplay)
+
+        console.log("tegnRutePaaKartet: stopp");
     }
 
 
@@ -99,24 +128,22 @@
 
       return d * 1000 // 1km = 1000m;
   }
-    var resolveTravelMode = function(distance){
-      console.log("Resolving distance " + distance);
-      if(distance === undefined || distance < 2000) {
+    var hvordanSkalViReiseBasertPaa = function(avstand){
+      console.log("Avstanden er paa " + avstand + " meter");
+      if(avstand === undefined || avstand < 2000) {
         console.log("google.maps.TravelMode.WALKING");
         return google.maps.TravelMode.WALKING;
       }
         
-      if(distance > 2000){
-        console.log("google.maps.TravelMode.TRANSIT");
+      if(avstand > 2000){
+        console.log("google.maps.TravelMode.DRIVING");
         return google.maps.TravelMode.DRIVING;
       }
     }
 
 
     var tegnOppKart = function(){
-      directionsDisplay = new google.maps.DirectionsRenderer(rendererOptions);
       directionsService = new google.maps.DirectionsService();
-
        var mapOptions = {
           zoom: 10,
           center: new google.maps.LatLng(59.8, 10.6),
@@ -130,7 +157,6 @@
           } 
         }
         map = new google.maps.Map(document.getElementById('map-canvas'), mapOptions);
-        directionsDisplay.setMap(map);
     }
 
 
@@ -146,6 +172,7 @@
 
     
     var registrerPosisjon = function(){
+      var now = Date.parse(new Date());
       console.log("registrerPosisjon : start" );
       if(ip !== undefined && navigator.geolocation) {
           console.log(ip);
@@ -160,10 +187,12 @@
                 if(route!==undefined){
                     console.log("registrerPosisjon : Oppdatert time+ip");
                     route.pos = nyPosisjon;
+                    route.updated=now;
                     Route.update({_id:route._id},route);                
                 } else {
                     console.log("registrerPosisjon : Ny posisjon for time+ip");
-                    Route.insert({time:time,ip:ip,pos:nyPosisjon});  
+                    var nick=prompt('Nick',' ');
+                    Route.insert({time:time,ip:ip,pos:nyPosisjon,main:false,updated:now,nick:nick});  
                 }
               } else {
                 console.log("registrerPosisjon : Ikke oppdatert. Ny posisjon er "+ avs + " meter unna.");
@@ -174,24 +203,68 @@
       console.log("registrerPosisjon : stopp" );
     }
 
+    var nullstillView = function(){
+      for (var i = 0; i < directionsDisplayArray.length; i++) {
+        directionsDisplayArray[i].setMap(null);
+      };
+      for (var i = 0; i < markers.length; i++) {
+        markers[i].setMap(null);
+      };
+
+      markers = [];
+      directionsDisplayArray = [];
+    }
+
 
     var oppdaterRute = function(){
         console.log("oppdaterRute : start" );
-        var points = Route.find({time:time});
-        console.log("Fant " + points.count() + " punkter");
-        if(points.count() > 1){
-          var pArray = [];
-          console.log("Points:");
-          points.forEach(function(point){
-            console.log(point);
-            pArray.push(point);
-          });        
 
-          var pos1 = pArray[0].pos;
-          var pos2 = pArray[1].pos;
-          var travelMode = resolveTravelMode(avstand(pos1, pos2));
-          drawDirectionsOnMap(pos1, pos2, travelMode);
-        }
+        console.log(new Date((Date.parse(new Date()))));
+        console.log(new Date((Date.parse(new Date()) - 40000)));
+
+          var destination = Route.findOne({time:time,main:true});
+          var origins = Route.find({time:time,main:false});
+          console.log("Destination set: ")
+          console.log(destination !== undefined);
+          console.log("Fant " + origins.count() + " som skal til destinasjonen");
+          if(destination !== undefined && origins.count() > 0){
+            if(infowindow !== undefined){
+              infowindow.setMap(null);  
+            }
+
+            var originArray = [];
+            console.log("Points:");
+            origins.forEach(function(origin){
+              console.log(origin);
+              originArray.push(origin);
+            });        
+
+            nullstillView();
+
+            for (var i = 0; i < originArray.length; i++) {
+              var pos1 = originArray[i].pos;
+              var pos2 = destination.pos;
+              var nickOrigin  = originArray[i].nick;
+              var nickDestination  = destination.nick;
+              var travelMode = hvordanSkalViReiseBasertPaa(avstand(pos1, pos2));
+              tegnRutePaaKartet(pos1, pos2, travelMode, nickOrigin, nickDestination);
+            };
+          }
+
+          if(destination !== undefined && origins.count() === 0){
+            var latlon = new google.maps.LatLng(destination.pos.k, destination.pos.B);
+            console.log("oppdaterRute : Bare et punkt. Viser det frem." );
+            if(infowindow !==undefined){
+              infowindow.setMap(null);  
+            }
+            
+            infowindow = new google.maps.InfoWindow({
+            map: map,
+            position:latlon,
+            content: 'Du er her.'
+            });
+            map.setCenter(latlon);
+          }
         console.log("oppdaterRute : stopp" );
     }
 
@@ -203,8 +276,7 @@
   }
 
     Meteor.setInterval(registrerPosisjon, 10000);
-    Meteor.setInterval(oppdaterRute, 10000); 
-    // lets do that when everything is loaded.
+    Meteor.setInterval(oppdaterRute, 20000); 
     Meteor.setTimeout(lagUnikIdForKart, 5000);
   }
 
