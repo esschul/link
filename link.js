@@ -2,8 +2,6 @@
 
   if (Meteor.isClient) {
 
-    var linkEstablished = false;
-
     var time;
     var ip;
 
@@ -18,6 +16,10 @@
     var sistPosisjon;
     var nyPosisjon;
 
+
+
+
+
     var hentIdFraAdresseLinje = function(){
       var array = window.location.href.split("/");
       if(array.length === 4 && array[3].length === 13){
@@ -28,23 +30,10 @@
     var lagUnikIdForKart = function(){
         time = hentIdFraAdresseLinje();
         if(time !== undefined){
-            var count = Route.find({time:time,main:true}).count();
-            if(count === 0){
-              console.log("lagUnikIdForKart:Rute funnet. Lager destinasjonspunkt.")
-              var nick=prompt('Nick',' ');
-              Route.insert({time:time,ip:ip,main:true,nick:nick});
-            } else {
-              console.log("lagUnikIdForKart:Rute funnet.");
-            }
+              registrerPosisjon();
         } else {
           window.location.href+=new Date().getTime();
         }
-    }
-
-    // future
-    var lagMotePunkt = function(lat,lon){
-      Route.delete({time:time,main:true});
-      Route.insert({time:time,pos:new google.maps.LatLng(lat,lon),main:true});
     }
 
 
@@ -68,13 +57,16 @@
         var originMarker = new google.maps.InfoWindow({
             map: map,
             position: originLatLon,
-            content: nickOrigin
+            content: nickOrigin,
+            disableAutoPan: true
+
         });
 
         var destinationMarker = new google.maps.InfoWindow({
             map: map,
             position:destinationLatLon,
-            content: nickDestination
+            content: nickDestination,
+            disableAutoPan: true
         });
 
 
@@ -135,6 +127,12 @@
         return google.maps.TravelMode.WALKING;
       }
         
+      if(avstand > 35000){
+        console.log("google.maps.TravelMode.TRANSIT");
+        return google.maps.TravelMode.TRANSIT;
+      }
+
+
       if(avstand > 2000){
         console.log("google.maps.TravelMode.DRIVING");
         return google.maps.TravelMode.DRIVING;
@@ -170,35 +168,83 @@
       tegnOppKart();
     });
 
+
+    var tegnEtPunkt = function(){
+          console.log("Tegne opp et punkt");
+          var destination = Route.find({time:time,main:true});
+          if(destination !== undefined && origins.count() === 0){
+            var latlon = new google.maps.LatLng(destination.pos.k, destination.pos.B);
+            console.log("oppdaterRute : Bare et punkt. Viser det frem." );
+            if(infowindow !==undefined){
+              infowindow.setMap(null);  
+            }
+            
+            infowindow = new google.maps.InfoWindow({
+            map: map,
+            position:latlon,
+            disableAutoPan: true,
+            content: 'Du er her.'
+            });
+            map.setCenter(latlon);
+          }
+    }
+
     
     var registrerPosisjon = function(){
+      var mainNotRegistered = Route.find({time:time,main:true}).count() === 0;
+      console.log(Route.find({time:time,main:true}).count());  
+      console.log(mainNotRegistered);  
       var now = Date.parse(new Date());
       console.log("registrerPosisjon : start" );
       if(ip !== undefined && navigator.geolocation) {
           console.log(ip);
-          navigator.geolocation.getCurrentPosition(function(position) {
+
+          var options = {
+            enableHighAccuracy: true
+          };
+
+          var success = function(position) {
+            console.log(position);
             nyPosisjon = new google.maps.LatLng(position.coords.latitude,position.coords.longitude);
-            if(nyPosisjon !== sistPosisjon){
+            if(mainNotRegistered){
+              console.log("registrerPosisjon : Destinasjon er ikke registrert")  
+              var nick=prompt('Nick',' ');
+              Route.insert({time:time,ip:ip,pos:nyPosisjon,main:mainNotRegistered,updated:now,nick:nick});  
+              tegnEtPunkt();
+            } else if(nyPosisjon !== sistPosisjon){
+              console.log("registrerPosisjon : nyPosisjon !== sistPosisjon");
               var avs = avstand(nyPosisjon,sistPosisjon);
+
               if(sistPosisjon === undefined || avs > 15){
                 console.log("registrerPosisjon : Ny posisjon er "+ avs + " meter unna.");
-                sistPosisjon=nyPosisjon;  
                 var route = Route.findOne({time:time,ip:ip});
                 if(route!==undefined){
                     console.log("registrerPosisjon : Oppdatert time+ip");
                     route.pos = nyPosisjon;
                     route.updated=now;
                     Route.update({_id:route._id},route);                
+
                 } else {
-                    console.log("registrerPosisjon : Ny posisjon for time+ip");
+                    console.log("registrerPosisjon : Ny deltaker!");
                     var nick=prompt('Nick',' ');
-                    Route.insert({time:time,ip:ip,pos:nyPosisjon,main:false,updated:now,nick:nick});  
+                    Route.insert({time:time,ip:ip,pos:nyPosisjon,main:mainNotRegistered,updated:now,nick:nick});  
+                    console.log("registrerPosisjon: Forventer at den oppdaterer ruten.");
                 }
-              } else {
-                console.log("registrerPosisjon : Ikke oppdatert. Ny posisjon er "+ avs + " meter unna.");
               }
+            } else {
+                console.log("registrerPosisjon : Ikke oppdatert. Ny posisjon er "+ avs + " meter unna.");
             }
-          });
+          }
+
+
+          function error(err) {
+            console.warn('ERROR(' + err.code + '): ' + err.message);
+          };
+
+
+          navigator.geolocation.getCurrentPosition(success, error, options);
+
+
       }
       console.log("registrerPosisjon : stopp" );
     }
@@ -216,7 +262,13 @@
     }
 
 
-    var oppdaterRute = function(){
+  if (typeof(Number.prototype.toRad) === "undefined") {
+    Number.prototype.toRad = function() {
+      return this * Math.PI / 180;
+    }
+  }
+
+    Deps.autorun(function () {
         console.log("oppdaterRute : start" );
 
         console.log(new Date((Date.parse(new Date()))));
@@ -224,10 +276,15 @@
 
           var destination = Route.findOne({time:time,main:true});
           var origins = Route.find({time:time,main:false});
+
+
           console.log("Destination set: ")
           console.log(destination !== undefined);
           console.log("Fant " + origins.count() + " som skal til destinasjonen");
-          if(destination !== undefined && origins.count() > 0){
+          if(destination !== undefined && destination.pos !== undefined && origins.count() > 0){
+            console.log("destination");
+            console.log(destination);
+
             if(infowindow !== undefined){
               infowindow.setMap(null);  
             }
@@ -251,33 +308,13 @@
             };
           }
 
-          if(destination !== undefined && origins.count() === 0){
-            var latlon = new google.maps.LatLng(destination.pos.k, destination.pos.B);
-            console.log("oppdaterRute : Bare et punkt. Viser det frem." );
-            if(infowindow !==undefined){
-              infowindow.setMap(null);  
-            }
-            
-            infowindow = new google.maps.InfoWindow({
-            map: map,
-            position:latlon,
-            content: 'Du er her.'
-            });
-            map.setCenter(latlon);
-          }
-        console.log("oppdaterRute : stopp" );
-    }
+          console.log("oppdaterRute : stopp" );
+        
+    });
 
-
-  if (typeof(Number.prototype.toRad) === "undefined") {
-    Number.prototype.toRad = function() {
-      return this * Math.PI / 180;
-    }
-  }
 
     Meteor.setInterval(registrerPosisjon, 10000);
-    Meteor.setInterval(oppdaterRute, 20000); 
-    Meteor.setTimeout(lagUnikIdForKart, 5000);
+    Meteor.setTimeout(lagUnikIdForKart, 2000);
   }
 
   if (Meteor.isServer) {
